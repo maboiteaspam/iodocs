@@ -34,39 +34,107 @@ var express     = require('express'),
     url         = require('url'),
     http        = require('http'),
     https       = require('https'),
-    crypto      = require('crypto'),
-    redis       = require('redis'),
-    RedisStore  = require('connect-redis')(express);
+    crypto      = require('crypto')
+    ;
 
 // Configuration
 try {
-    var config = require('./config.json');
+    var config = require(process.cwd()  + '/config.json');
 } catch(e) {
     console.error("File config.json not found or is invalid.  Try: `cp config.json.sample config.json`");
     process.exit(1);
 }
 
+var db = null;
+if( config.sessionStorage != "redis" ){
+    var SessionStore = require('connect-session-store');
+    var dbStorage = function(config){
+        var db = {};
+
+        this.store = new SessionStore({
+            storeType: 'file',
+            storeOptions: {
+                path:'.',
+                useAsync:false,
+                reapInterval: 5000,
+                maxAge: 10000
+            }
+        });
+
+        this.set = function(key,val){
+            db[key] = val;
+            return true;
+        }
+        this.expire = function(key,time){
+            return true;
+        }
+        this.mget = function(keys, fn){
+            var retour = [];
+            for(var n in keys ){
+                retour.push(db[n]);
+            }
+            if( fn )
+                fn(null,retour);
+            return true;
+        }
+        this.mset = function(keys_vals, fn){
+            for( var i=0;i<keys_vals.length;i+=2){
+                db[ keys_vals[i] ] = keys_vals[i+1];
+            }
+            return true;
+        }
+    };
+    db = new dbStorage(config);
+}else{
+    var redis       = require('redis'),
+        RedisStore  = require('connect-redis')(express);
 //
 // Redis connection
 //
-var defaultDB = '0';
-config.redis.database = config.redis.database || defaultDB;
+    var defaultDB = '0';
+    config.redis.database = config.redis.database || defaultDB;
 
-if (process.env.REDISTOGO_URL) {
-    var rtg   = require("url").parse(process.env.REDISTOGO_URL);
-    config.redis.host = rtg.hostname;
-    config.redis.port = rtg.port;
-    config.redis.password = rtg.auth.split(":")[1];
+    if (process.env.REDISTOGO_URL) {
+        var rtg   = require("url").parse(process.env.REDISTOGO_URL);
+        config.redis.host = rtg.hostname;
+        config.redis.port = rtg.port;
+        config.redis.password = rtg.auth.split(":")[1];
+    }
+
+    var dbStorage = function(config){
+        var db = redis.createClient(config.redis.port, config.redis.host);
+        db.auth(config.redis.password);
+
+        db.on("error", function(err) {
+            if (config.debug) {
+                console.log("Error " + err);
+            }
+        });
+
+        this.store = new RedisStore({
+            'host':   config.redis.host,
+            'port':   config.redis.port,
+            'pass':   config.redis.password,
+            'db'  :   config.redis.database,
+            'maxAge': 1209600000
+        });
+
+        this.set = function(key,val){
+            return db.set(key,val);
+        }
+        this.expire = function(key,time){
+            return db.expire(key,time);
+        }
+        this.mget = function(keys, fn){
+            return db.mget(keys,fn);
+        }
+        this.mset = function(keys_vals, fn){
+            return db.mset(keys_vals,fn);
+        }
+    };
+    db = new dbStorage(config);
 }
 
-var db = redis.createClient(config.redis.port, config.redis.host);
-db.auth(config.redis.password);
-
-db.on("error", function(err) {
-    if (config.debug) {
-         console.log("Error " + err);
-    }
-});
 
 //
 // Load API Configs
@@ -99,13 +167,7 @@ app.configure(function() {
     app.use(express.cookieParser());
     app.use(express.session({
         secret: config.sessionSecret,
-        store:  new RedisStore({
-            'host':   config.redis.host,
-            'port':   config.redis.port,
-            'pass':   config.redis.password,
-            'db'  :   config.redis.database,
-            'maxAge': 1209600000
-        })
+        store:  db.store
     }));
 
     // Global basic authentication on server (applied if configured)

@@ -9,6 +9,7 @@
         "username" : "",
         "password" : ""
     },
+    "sessionStorage" : "redis",
     "redis" : {
         "host" : "localhost",
         "port" : 6379,
