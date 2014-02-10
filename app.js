@@ -196,11 +196,11 @@ app.configure('production', function() {
 // Middleware
 //
 function oauth(req, res, next) {
-    console.log('OAuth process started');
     var apiName = req.body.apiName,
         apiConfig = apisConfig[apiName];
 
     if (apiConfig.oauth) {
+        console.log('OAuth process started');
         var apiKey = req.body.apiKey || req.body.key,
             apiSecret = req.body.apiSecret || req.body.secret,
             refererURL = url.parse(req.headers.referer),
@@ -265,11 +265,11 @@ function oauth(req, res, next) {
 }
 
 function oauth2(req, res, next){
-    console.log('OAuth2 process started');
     var apiName = req.body.apiName,
         apiConfig = apisConfig[apiName];
 
     if (apiConfig.oauth2) {
+        console.log('OAuth2 process started');
         var apiKey = req.body.apiKey || req.body.key,
             apiSecret = req.body.apiSecret || req.body.secret,
             refererURL = url.parse(req.headers.referer),
