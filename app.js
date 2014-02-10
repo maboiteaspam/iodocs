@@ -54,7 +54,7 @@ if( config.sessionStorage != "redis" ){
         this.store = new SessionStore({
             storeType: 'file',
             storeOptions: {
-                path:'.',
+                path: config.session.path || '.',
                 useAsync:false,
                 reapInterval: 5000,
                 maxAge: 10000
